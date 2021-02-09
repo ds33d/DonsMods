@@ -45,44 +45,86 @@ Import-Module ActiveDirectory
     
     
 }
-function global:Get-EmployeeID($User) {
+function global:Get-UserStatus($EmployeeID,$Unlock,$UserName) {
     Import-Module ActiveDirectory
-    Write-Host -ForegroundColor Yellow "Looking up information that matches User:"$User
-    Get-ADUser -LDAPFilter "(SamAccountName=$User)" -Properties GivenName,Surname,EmployeeID | FL GivenName,Surname,EmployeeID
-
-}
-function global:Get-UserStatus($EmployeeID,$Unlock) {
-    Import-Module ActiveDirectory
-    Write-Host -ForegroundColor Yellow "Looking up information that matches ID#:"$EmployeeID
-
-    $userAccount = Get-ADUser -LDAPFilter "(EmployeeID=$EmployeeID)" -Properties SamAccountName,GivenName,Surname,EmployeeID,LockedOut
     
-    foreach($user in $userAccount){Write-Host -ForegroundColor Yellow "Found: " $user.SamAccountName}
-   
-    If($Unlock -eq "yes"){
-        Write-Host -ForegroundColor Yellow "Attempting unlock on: " $userAccount[0].GivenName $userAccount[0].Surname
-        Get-ADUser -LDAPFilter "(EmployeeID=$EmployeeID)" -Properties SamAccountName,GivenName,Surname,EmployeeID,LockedOut | Unlock-ADAccount
-        if($userAccount[0].LockedOut -eq $false) {
-            
-            Write-Host -ForegroundColor Yellow $userAccount[0].SamAccountName "is unlocked"
-        }
+
+    if($UserName){
+        Write-Host $UserName
+        Write-Host -ForegroundColor Yellow "Looking up information that matches Username:"$UserName
+        $userAccount = Get-ADUser -LDAPFilter "(SamAccountName=$UserName)" -Properties SamAccountName,GivenName,Surname,EmployeeID,LockedOut
         
+        foreach($user in $userAccount){
+            Write-Host -ForegroundColor Yellow "Found: " $user.SamAccountName
+            Write-Host -ForegroundColor Yellow "With EmployeeID of:" $user.EmployeeID    
+        }
+   
+        If($Unlock -eq "yes"){
+            Write-Host $userAccount
+            Write-Host -ForegroundColor Yellow "Attempting unlock on: " $userAccount.GivenName $userAccount.Surname
+            $userAccount | Unlock-ADAccount
+            if($userAccount.LockedOut -eq $false) {
+            
+                Write-Host -ForegroundColor Yellow $userAccount.SamAccountName "is unlocked"
+            }
+        
+        }
+        else{
+    
+            foreach($user in $userAccount){
+                If($user.LockedOut -eq $false){$lockedStatus = "No"}
+                else {$lockedStatus = "Yes"}
+        
+                Write-Host "-------------------------------------------------------"
+                Write-Host -ForegroundColor Green "Username: " $user.SamAccountName
+                Write-Host -ForegroundColor Green "Firstname: " $user.GivenName
+                Write-Host -ForegroundColor Green "Lastname: " $user.Surname
+                Write-Host -ForegroundColor Green "EmployeeID#: " $user.EmployeeID
+                Write-Host -ForegroundColor Green "Is the account locked out?:" $lockedStatus
+            }
+        
+        }
+    
+    
+    
     }
     else{
+        Write-Host $EmployeeID
+        $userAccount = Get-ADUser -LDAPFilter "(EmployeeID=$EmployeeID)" -Properties SamAccountName,GivenName,Surname,EmployeeID,LockedOut
     
-        foreach($user in $userAccount){
-            If($user.LockedOut -eq $false){$lockedStatus = "No"}
-            else {$lockedStatus = "Yes"}
-        
-            Write-Host "-------------------------------------------------------"
-            Write-Host -ForegroundColor Green "Username: " $user.SamAccountName
-            Write-Host -ForegroundColor Green "Firstname: " $user.GivenName
-            Write-Host -ForegroundColor Green "Lastname: " $user.Surname
-            Write-Host -ForegroundColor Green "EmployeeID#: " $user.EmployeeID
-            Write-Host -ForegroundColor Green "Is the account locked out?:" $lockedStatus
+        foreach($user in $userAccount){Write-Host -ForegroundColor Yellow "Found: " $user.SamAccountName}
+   
+        If($Unlock -eq "yes"){
+            foreach($user in $userAccount){
+                Write-Host -ForegroundColor Yellow "Attempting unlock associate: " $user.GivenName $user.Surname
+                Write-Host -ForegroundColor Yellow "Username:"$user.SamAccountName
+                $userAccount | Unlock-ADAccount
+                if($userAccount.LockedOut -eq $false) {
             
-        }
+                    Write-Host -ForegroundColor Green $user.SamAccountName "is unlocked"
+                }
+            }
+
         
+        }
+        else{
+    
+            foreach($user in $userAccount){
+                If($user.LockedOut -eq $false){$lockedStatus = "No"}
+                else {$lockedStatus = "Yes"}
+        
+                Write-Host "-------------------------------------------------------"
+                Write-Host -ForegroundColor Green "Username: " $user.SamAccountName
+                Write-Host -ForegroundColor Green "Firstname: " $user.GivenName
+                Write-Host -ForegroundColor Green "Lastname: " $user.Surname
+                Write-Host -ForegroundColor Green "EmployeeID#: " $user.EmployeeID
+                Write-Host -ForegroundColor Green "Is the account locked out?:" $lockedStatus
+            }
+        
+        }
+    
+    
+    
     }
 }
 function global:Get-LAPSPassword($ComputerName){
