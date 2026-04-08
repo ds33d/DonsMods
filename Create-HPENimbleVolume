@@ -1,0 +1,115 @@
+function Create-HPENimbleVolume($username,$name,$size,$array){
+$choice = 2
+
+##########################
+# Enable HTTPS
+###########################
+
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+
+###########################
+# Get Token
+###########################
+
+#$array = Read-Host -Prompt "Enter Nimble Node IP"
+#$username = Read-Host -Prompt "Username"
+$password = Read-Host -Prompt "Enter password"
+cls
+$data = @{
+    username = $username
+    password = $password
+}
+
+$body = convertto-json (@{ data = $data })
+
+$uri = "https://" + $array + ":5392/v1/tokens"
+$token = Invoke-RestMethod -Uri $uri -Method Post -Body $body
+$token = $token.data.session_token
+
+###########################
+# Print Results
+###########################
+
+Write-host "Token: " $token
+
+if($choice -eq 1){
+    ###########################
+    # Get Volume List
+    ###########################
+
+    $header = @{ "X-Auth-Token" = $token }
+    $uri = "https://" + $array + ":5392/v1/volumes"
+    $volume_list = Invoke-RestMethod -Uri $uri -Method Get -Header $header
+    $vol_array = @();
+    foreach ($volume_id in $volume_list.data.id){
+	
+	    $uri = "https://" + $array + ":5392/v1/volumes/" + $volume_id
+	    $volume = Invoke-RestMethod -Uri $uri -Method Get -Header $header
+	    #write-host $volume.data.name :     $volume.data.id
+	    Write-Host $volume.data.perfpolicy_id
+        $vol_array += $volume.data
+    
+	
+    }
+
+
+
+    ###########################
+    # Print Results
+    ###########################
+
+    $vol_array | sort-object size,name -descending | select size,name,online,agent_type,target_name | format-table -autosize
+}
+if ($choice -eq 2){
+    ###########################
+    # Create a Volume
+    ###########################
+    #$name = Read-Host "Enter Volume Name: "
+    #$size = Read-Host "Enter Volume Size (GB): "
+    $data = @{
+        name = $name
+	    perfpolicy_id = '0376d035139a24d955000000000000000000000014'
+	    size = [int]$size * 1024
+    }
+
+    Write-Host "Creating the volume..."
+    $body = convertto-json (@{ data = $data })
+    $header = @{ "X-Auth-Token" = $token }
+    $uri = "https://" + $array + ":5392/v1/volumes"
+    $result = Invoke-RestMethod -Uri $uri -Method Post -Body $body -Header $header
+
+    $result.data | Select-Object name,size,description,target_name | format-table -autosize
+    $result.data.id
+
+    Write-Host "Setting the  permissions..."
+
+    # Get Initiator Groups dynamically
+    $igUri = "https://" + $array + ":5392/v1/initiator_groups"
+    $igResponse = Invoke-RestMethod -Uri $igUri -Method Get -Header $header
+    $initiatorGroups = @($igResponse.data)
+
+    # Add all discovered initiator groups
+    Write-Host "Adding all discovered initiator groups..."
+    
+    foreach ($group in $initiatorGroups) {
+        if ($group.name -like "*-ESX*") {
+            $igId = $group.id
+            $volId = $result.data.id
+            
+            $aclData = @{
+                initiator_group_id = $igId
+                vol_id = $volId
+            }
+            
+            $aclBody = ConvertTo-Json (@{ data = $aclData })
+            $aclUri = "https://" + $array + ":5392/v1/access_control_records"
+            
+            Invoke-RestMethod -Uri $aclUri -Method Post -Body $aclBody -Header $header
+            Write-Host "Access control record created for $($group.name)"
+        }
+    }
+    Write-Host "!!REMINDER: Please add the new volume as a datastore in vCenter!" -ForegroundColor Yellow
+}
+
+
+}
